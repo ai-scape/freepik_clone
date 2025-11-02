@@ -4,7 +4,13 @@ export type ModelSpec = {
   label: string;
   supportsEnd: boolean;
   mapInput: (
-    u: { prompt: string; startUrl: string; endUrl?: string }
+    u: {
+      prompt: string;
+      startUrl: string;
+      endUrl?: string;
+      aspectRatio?: string;
+      resolution?: string;
+    }
   ) => Record<string, string | number | boolean | undefined>;
   getVideoUrl: (data: unknown) => string | undefined;
 };
@@ -15,11 +21,11 @@ export const EXTRA_MODELS: ModelSpec[] = [
     endpoint: "fal-ai/bytedance/seedance/v1/pro/fast/image-to-video",
     label: "Seedance 1.0 Pro Fast (I2V)",
     supportsEnd: false,
-    mapInput: ({ prompt, startUrl }) => ({
+    mapInput: ({ prompt, startUrl, aspectRatio, resolution }) => ({
       prompt,
       image_url: startUrl,
-      aspect_ratio: "auto",
-      resolution: "1080p",
+      aspect_ratio: aspectRatio ?? "auto",
+      resolution: resolution ?? "1080p",
       duration: "5",
       seed: -1,
       enable_safety_checker: true,
@@ -31,12 +37,12 @@ export const EXTRA_MODELS: ModelSpec[] = [
     endpoint: "fal-ai/bytedance/seedance/v1/pro/image-to-video",
     label: "Seedance 1.0 Pro (I2V + End)",
     supportsEnd: true,
-    mapInput: ({ prompt, startUrl, endUrl }) => ({
+    mapInput: ({ prompt, startUrl, endUrl, aspectRatio, resolution }) => ({
       prompt,
       image_url: startUrl,
       ...(endUrl ? { end_image_url: endUrl } : {}),
-      aspect_ratio: "auto",
-      resolution: "1080p",
+      aspect_ratio: aspectRatio ?? "auto",
+      resolution: resolution ?? "1080p",
       duration: "5",
       seed: -1,
       enable_safety_checker: true,
@@ -61,12 +67,12 @@ export const EXTRA_MODELS: ModelSpec[] = [
     endpoint: "fal-ai/wan/v2.2-a14b/image-to-video/turbo",
     label: "WAN 2.2 Turbo (I2V + End)",
     supportsEnd: true,
-    mapInput: ({ prompt, startUrl, endUrl }) => ({
+    mapInput: ({ prompt, startUrl, endUrl, aspectRatio, resolution }) => ({
       image_url: startUrl,
       prompt,
       ...(endUrl ? { end_image_url: endUrl } : {}),
-      resolution: "720p",
-      aspect_ratio: "auto",
+      resolution: resolution ?? "720p",
+      aspect_ratio: aspectRatio ?? "auto",
       enable_safety_checker: true,
       enable_output_safety_checker: false,
       enable_prompt_expansion: false,

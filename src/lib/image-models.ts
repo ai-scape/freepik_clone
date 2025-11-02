@@ -21,7 +21,7 @@ export type ImageModelSpec = {
   id: string;
   label: string;
   endpoint: string;
-  mode: "edit" | "hybrid";
+  mode: "edit" | "hybrid" | "text";
   maxRefs: number;
   mapInput: (
     job: ImageJob
@@ -31,6 +31,37 @@ export type ImageModelSpec = {
   >;
   getUrls: (out: unknown) => string[];
 };
+
+function resolveAspectRatio(
+  size: ImageJob["size"]
+): string | undefined {
+  if (!size) return undefined;
+  if (typeof size === "string") {
+    switch (size) {
+      case "square_hd":
+      case "square":
+        return "1:1";
+      case "portrait_4_3":
+        return "3:4";
+      case "portrait_16_9":
+        return "9:16";
+      case "landscape_4_3":
+        return "4:3";
+      case "landscape_16_9":
+        return "16:9";
+      default:
+        return undefined;
+    }
+  }
+  const { width, height } = size;
+  if (!width || !height) return undefined;
+  const gcd = (a: number, b: number): number =>
+    b === 0 ? a : gcd(b, a % b);
+  const factor = gcd(Math.round(width), Math.round(height));
+  const w = Math.round(width / factor);
+  const h = Math.round(height / factor);
+  return `${w}:${h}`;
+}
 
 export const IMAGE_MODELS: ImageModelSpec[] = [
   {
@@ -45,6 +76,26 @@ export const IMAGE_MODELS: ImageModelSpec[] = [
       ...(size ? { image_size: size } : {}),
       ...(seed !== undefined ? { seed } : {}),
     }),
+    getUrls: (output) =>
+      ((output as { images?: Array<{ url?: string }> })?.images ?? [])
+        .map((image) => image?.url)
+        .filter(Boolean) as string[],
+  },
+  {
+    id: "nano-banana",
+    label: "Nano Banana — Text",
+    endpoint: "fal-ai/nano-banana",
+    mode: "text",
+    maxRefs: 0,
+    mapInput: ({ prompt, size }) => {
+      const aspectRatio = resolveAspectRatio(size);
+      return {
+        prompt,
+        ...(aspectRatio ? { aspect_ratio: aspectRatio } : {}),
+        num_images: 1,
+        output_format: "jpeg",
+      };
+    },
     getUrls: (output) =>
       ((output as { images?: Array<{ url?: string }> })?.images ?? [])
         .map((image) => image?.url)
@@ -112,38 +163,7 @@ export const IMAGE_MODELS: ImageModelSpec[] = [
         .map((image) => image?.url)
         .filter(Boolean) as string[],
   },
-  {
-    id: "gemini-flash-edit-multi",
-    label: "Gemini Flash Edit — Multi Image",
-    endpoint: "fal-ai/gemini-flash-edit/multi",
-    mode: "edit",
-    maxRefs: 8,
-    mapInput: ({ prompt, imageUrls, size, seed }) => ({
-      prompt,
-      image_urls: imageUrls.slice(0, 8),
-      ...(size ? { image_size: size } : {}),
-      ...(seed !== undefined ? { seed } : {}),
-    }),
-    getUrls: (output) => {
-      const payload = output as {
-        images?: Array<{ url?: string }>;
-        image?: { url?: string };
-      };
-      const list =
-        payload?.images ??
-        (payload?.image ? [payload.image] : []);
-      return list.map((img) => img?.url).filter(Boolean) as string[];
-    },
-  },
 ];
-
-export const IMAGE_MODEL_PRICE_HINT: Record<string, string | undefined> = {
-  "nano-banana-edit": "~$0.039 / image",
-  "qwen-image-edit-plus": undefined,
-  "seedream-v4-edit": "~$0.03 / image",
-  "chrono-edit": undefined,
-  "gemini-flash-edit-multi": "~$0.04 / image",
-};
 
 export async function runImageJob(
   spec: ImageModelSpec,

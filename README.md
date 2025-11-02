@@ -33,11 +33,10 @@ Freepik Clone is a web studio for generating cinematic video loops and reference
 
 ### Image Pipelines
 - `nano-banana-edit` — fast multi-reference edit pipeline.
+- `nano-banana` — prompt-only generation.
 - `qwen-image-edit-plus` — Alibaba Qwen image edit with inference-step control.
 - `seedream-v4-edit` — ByteDance Seedream v4 for high-fidelity edits.
 - `chrono-edit` — Chrono temporal edit for sequential consistency.
-- `gemini-flash-edit-multi` — Google Gemini Flash multi-image edit.
-
 _Model specs live in `src/lib/models.json`, `src/lib/models-extra.ts`, and `src/lib/image-models.ts` if you need to extend or disable a pipeline._
 
 ## Deployment Guidelines

@@ -59,36 +59,94 @@ const jsonSpecs =
     label: spec.label ?? spec.id,
   })) ?? [];
 
-const extraSpecs: ModelSpec[] = EXTRA_MODELS.map(
-  (extra: ExtraModelSpec): ModelSpec => ({
+const RESOLUTION_CONFIG: Record<
+  string,
+  { values: Array<string | number>; default: string | number }
+> = {
+  "seedance-pro-fast": {
+    values: ["480p", "720p", "1080p"],
+    default: "1080p",
+  },
+  "seedance-pro": {
+    values: ["480p", "720p", "1080p"],
+    default: "1080p",
+  },
+  "wan-2.2-turbo": {
+    values: ["480p", "580p", "720p"],
+    default: "720p",
+  },
+};
+
+const ASPECT_RATIO_CONFIG: Record<
+  string,
+  { values: Array<string | number>; default: string | number }
+> = {
+  "seedance-pro-fast": {
+    values: ["auto", "21:9", "16:9", "4:3", "1:1", "3:4", "9:16"],
+    default: "auto",
+  },
+  "seedance-pro": {
+    values: ["auto", "21:9", "16:9", "4:3", "1:1", "3:4", "9:16"],
+    default: "auto",
+  },
+  "wan-2.2-turbo": {
+    values: ["auto", "16:9", "9:16", "1:1"],
+    default: "auto",
+  },
+};
+
+const extraSpecs: ModelSpec[] = EXTRA_MODELS.map((extra: ExtraModelSpec): ModelSpec => {
+  const supports: ModelSpec["supports"] = {
+    startFrame: true,
+    endFrame: extra.supportsEnd,
+    audio: false,
+    resolution: Boolean(RESOLUTION_CONFIG[extra.id]),
+    aspectRatio: Boolean(ASPECT_RATIO_CONFIG[extra.id]),
+    fps: false,
+  };
+
+  const params: Record<string, ParamDefinition | undefined> = {
+    prompt: { type: "string", required: true },
+    start_frame_url: {
+      type: "string",
+      required: true,
+      uiKey: "start_frame_url",
+    },
+    ...(extra.supportsEnd
+      ? {
+          end_frame_url: {
+            type: "string",
+            required: false,
+            uiKey: "end_frame_url",
+          },
+        }
+      : {}),
+  };
+
+  const resolutionConfig = RESOLUTION_CONFIG[extra.id];
+  if (resolutionConfig) {
+    params.resolution = {
+      type: "enum",
+      values: resolutionConfig.values,
+      default: resolutionConfig.default,
+    };
+  }
+
+  const aspectConfig = ASPECT_RATIO_CONFIG[extra.id];
+  if (aspectConfig) {
+    params.aspect_ratio = {
+      type: "enum",
+      values: aspectConfig.values,
+      default: aspectConfig.default,
+    };
+  }
+
+  return {
     id: extra.id,
     endpoint: extra.endpoint,
     label: extra.label,
-    supports: {
-      startFrame: true,
-      endFrame: extra.supportsEnd,
-      audio: false,
-      resolution: false,
-      aspectRatio: false,
-      fps: false,
-    },
-    params: {
-      prompt: { type: "string", required: true },
-      start_frame_url: {
-        type: "string",
-        required: true,
-        uiKey: "start_frame_url",
-      },
-      ...(extra.supportsEnd
-        ? {
-            end_frame_url: {
-              type: "string",
-              required: false,
-              uiKey: "end_frame_url",
-            },
-          }
-        : {}),
-    },
+    supports,
+    params,
     output: {
       videoPath: "video.url",
     },
@@ -98,11 +156,13 @@ const extraSpecs: ModelSpec[] = EXTRA_MODELS.map(
           prompt: unified.prompt,
           startUrl: unified.start_frame_url,
           endUrl: unified.end_frame_url,
+          aspectRatio: unified.aspect_ratio,
+          resolution: unified.resolution,
         }),
       getVideoUrl: (data) => extra.getVideoUrl(data),
     },
-  })
-);
+  };
+});
 
 export const MODEL_SPECS: ModelSpec[] = [...jsonSpecs, ...extraSpecs];
 

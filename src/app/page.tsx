@@ -5,6 +5,7 @@ import {
   useRef,
   useState,
 } from "react";
+import type { ReactElement } from "react";
 import {
   DEFAULT_MODEL_ID,
   MODEL_SPECS,
@@ -132,7 +133,10 @@ type DropZoneProps = {
 };
 
 const dropZoneBase =
-  "group relative flex flex-col items-center justify-center gap-3 rounded-2xl border border-white/10 bg-white/5 px-6 py-8 text-center transition duration-300 hover:border-sky-400/60 hover:bg-white/10";
+  "group relative flex h-28 w-full flex-col items-center justify-center gap-1 rounded-lg border border-white/10 bg-white/5 px-3 text-center transition duration-300 hover:border-sky-400/60 hover:bg-white/10";
+
+const primaryActionButton =
+  "w-full rounded-xl bg-gradient-to-r from-sky-500 via-blue-500 to-indigo-500 py-2 text-sm font-semibold text-white shadow-lg shadow-sky-500/25 transition duration-200 hover:-translate-y-0.5 hover:shadow-[0_24px_80px_rgba(59,130,246,0.35)]";
 
 const DropZone = ({
   label,
@@ -179,17 +183,17 @@ const DropZone = ({
         disabled={disabled}
         onChange={(event) => handleFiles(event.currentTarget.files)}
       />
-      <span className="pointer-events-none absolute inset-0 rounded-2xl bg-gradient-to-br from-white/8 via-transparent to-transparent opacity-0 transition duration-300 group-hover:opacity-100" />
-      <span className="pointer-events-none absolute inset-0 overflow-hidden rounded-2xl opacity-0 transition duration-300 group-hover:opacity-100">
+      <span className="pointer-events-none absolute inset-0 rounded-lg bg-gradient-to-br from-white/8 via-transparent to-transparent opacity-0 transition duration-300 group-hover:opacity-100" />
+      <span className="pointer-events-none absolute inset-0 overflow-hidden rounded-lg opacity-0 transition duration-300 group-hover:opacity-100">
         <span className="absolute inset-0 -translate-x-full bg-gradient-to-r from-transparent via-white/35 to-transparent animate-shimmer" />
       </span>
-      <div className="flex flex-col items-center gap-3">
+      <div className="flex h-full w-full flex-col items-center gap-2">
         <div className="text-sm font-semibold uppercase tracking-wide text-slate-200">
           {label}
           {required ? " *" : ""}
         </div>
         {previewUrl ? (
-          <div className="relative w-full overflow-hidden rounded-xl border border-white/10 bg-black/40" style={{ paddingBottom: "56%" }}>
+          <div className="relative h-full w-full overflow-hidden rounded-md border border-white/10 bg-black/40">
             <img
               src={previewUrl}
               alt={`${label} preview`}
@@ -197,12 +201,12 @@ const DropZone = ({
             />
           </div>
         ) : (
-          <div className="text-xs text-slate-400">
+          <div className="flex h-full w-full items-center justify-center px-2 text-[11px] text-slate-400">
             Drag & drop or click to upload
           </div>
         )}
         {fileName ? (
-          <div className="max-w-full truncate text-xs text-slate-500">
+          <div className="max-w-full truncate text-[11px] text-slate-500">
             {fileName}
           </div>
         ) : null}
@@ -218,7 +222,7 @@ export default function Page() {
   const [selectedModelId, setSelectedModelId] = useState(DEFAULT_MODEL_ID);
   const [activeTab, setActiveTab] = useState<"video" | "image">("video");
   const [prompt, setPrompt] = useState("");
-  const [isGenerating, setIsGenerating] = useState(false);
+  const [pendingUploads, setPendingUploads] = useState(0);
   const [duration, setDuration] = useState<string | number | undefined>();
   const [resolution, setResolution] = useState<string | undefined>();
   const [aspectRatio, setAspectRatio] = useState<string | undefined>();
@@ -573,7 +577,7 @@ export default function Page() {
       }
     }
 
-    setIsGenerating(true);
+    setPendingUploads((count) => count + 1);
     const jobId = createId("job");
     const basePayload: UnifiedPayload = {
       modelId: model.id,
@@ -618,7 +622,7 @@ export default function Page() {
         error: error instanceof Error ? error.message : "Upload failed.",
       });
     } finally {
-      setIsGenerating(false);
+      setPendingUploads((count) => Math.max(0, count - 1));
     }
   };
 
@@ -677,9 +681,10 @@ export default function Page() {
     []
   );
 
-  const renderControl = (key: string, def?: ParamDefinition) => {
-    if (!def) return null;
-    if (!selectedModel) return null;
+  const renderControl = useCallback(
+    (key: string, def?: ParamDefinition) => {
+      if (!def) return null;
+      if (!selectedModel) return null;
     const uiKey = def.uiKey ?? (key as keyof UnifiedPayload);
 
     if (def.type === "enum" && def.values) {
@@ -708,14 +713,17 @@ export default function Page() {
                 : undefined;
 
       return (
-        <div key={key} className="flex flex-col gap-1.5">
-          <label className="text-xs font-semibold uppercase tracking-wide text-slate-400">
+        <div
+          key={key}
+          className="flex flex-col gap-1 rounded-lg border border-white/10 bg-white/5 px-2 py-2 text-xs"
+        >
+          <span className="text-[11px] font-semibold uppercase tracking-wide text-slate-300">
             {key.replace(/_/g, " ")}
-          </label>
+          </span>
           <select
             value={currentValue !== undefined ? String(currentValue) : ""}
             onChange={(event) => handleChange(event.target.value)}
-            className="rounded-2xl border border-white/10 bg-white/5 px-3 py-2 text-sm text-white outline-none transition focus:border-sky-400 focus:ring-1 focus:ring-sky-400"
+            className="h-8 w-full rounded-md border border-white/10 bg-black/30 px-2 text-xs text-white outline-none transition focus:border-sky-400 focus:ring-1 focus:ring-sky-400"
           >
             <option value="" disabled>
               Select
@@ -732,15 +740,18 @@ export default function Page() {
 
     if (key === "negative_prompt") {
       return (
-        <div key={key} className="flex flex-col gap-1.5">
-          <label className="text-xs font-semibold uppercase tracking-wide text-slate-400">
-            Negative Prompt
-          </label>
+        <div
+          key={key}
+          className="flex flex-col gap-1 rounded-lg border border-white/10 bg-white/5 px-2 py-2 text-xs"
+        >
+          <span className="text-[11px] font-semibold uppercase tracking-wide text-slate-300">
+            Negative prompt
+          </span>
           <input
             type="text"
             value={negativePrompt}
             onChange={(event) => setNegativePrompt(event.target.value)}
-            className="rounded-2xl border border-white/10 bg-white/5 px-3 py-2 text-sm text-white outline-none transition focus:border-sky-400 focus:ring-1 focus:ring-sky-400"
+            className="h-8 w-full rounded-md border border-white/10 bg-black/30 px-2 text-xs text-white outline-none transition focus:border-sky-400 focus:ring-1 focus:ring-sky-400"
           />
         </div>
       );
@@ -748,10 +759,13 @@ export default function Page() {
 
     if (key === "cfg_scale") {
       return (
-        <div key={key} className="flex flex-col gap-1.5">
-          <label className="text-xs font-semibold uppercase tracking-wide text-slate-400">
-            CFG Scale
-          </label>
+        <div
+          key={key}
+          className="flex flex-col gap-1 rounded-lg border border-white/10 bg-white/5 px-2 py-2 text-xs"
+        >
+          <span className="text-[11px] font-semibold uppercase tracking-wide text-slate-300">
+            CFG scale
+          </span>
           <input
             type="number"
             step="0.1"
@@ -763,7 +777,7 @@ export default function Page() {
                   : Number.parseFloat(event.target.value)
               )
             }
-            className="rounded-2xl border border-white/10 bg-white/5 px-3 py-2 text-sm text-white outline-none transition focus:border-sky-400 focus:ring-1 focus:ring-sky-400"
+            className="h-8 w-full rounded-md border border-white/10 bg-black/30 px-2 text-xs text-white outline-none transition focus:border-sky-400 focus:ring-1 focus:ring-sky-400"
           />
         </div>
       );
@@ -776,15 +790,15 @@ export default function Page() {
       return (
         <div
           key={key}
-          className="flex items-center justify-between rounded-2xl border border-white/10 bg-white/5 px-4 py-3"
+          className="flex items-center justify-between rounded-lg border border-white/10 bg-white/5 px-2.5 py-2 text-xs"
         >
-          <div>
-            <div className="text-sm font-semibold text-slate-200">
+          <div className="flex flex-col gap-0.5">
+            <span className="text-[11px] font-semibold uppercase tracking-wide text-slate-300">
               Generate audio
-            </div>
-            <div className="text-xs text-slate-500">
+            </span>
+            <span className="text-[10px] text-slate-500">
               Auto soundtrack where supported
-            </div>
+            </span>
           </div>
           <button
             type="button"
@@ -807,15 +821,15 @@ export default function Page() {
       return (
         <div
           key={key}
-          className="flex items-center justify-between rounded-2xl border border-white/10 bg-white/5 px-4 py-3"
+          className="flex items-center justify-between rounded-lg border border-white/10 bg-white/5 px-2.5 py-2 text-xs"
         >
-          <div>
-            <div className="text-sm font-semibold text-slate-200">
+          <div className="flex flex-col gap-0.5">
+            <span className="text-[11px] font-semibold uppercase tracking-wide text-slate-300">
               Prompt optimizer
-            </div>
-            <div className="text-xs text-slate-500">
+            </span>
+            <span className="text-[10px] text-slate-500">
               Let the model enhance prompts automatically
-            </div>
+            </span>
           </div>
           <button
             type="button"
@@ -834,8 +848,47 @@ export default function Page() {
       );
     }
 
-    return null;
-  };
+      return null;
+    },
+    [
+      selectedModel,
+      duration,
+      aspectRatio,
+      resolution,
+      fps,
+      negativePrompt,
+      cfgScale,
+      generateAudio,
+      promptOptimizer,
+    ]
+  );
+
+  const controlMap = useMemo(
+    () => Object.fromEntries(controlSections),
+    [controlSections]
+  );
+
+  const primaryKeys: Array<keyof UnifiedPayload> = useMemo(
+    () => ["duration", "resolution", "aspect_ratio"],
+    []
+  );
+
+  const primaryControls = useMemo(
+    () =>
+      primaryKeys
+        .map((key) => renderControl(key as string, controlMap[key as string]))
+        .filter((control): control is ReactElement => Boolean(control)),
+    [primaryKeys, controlMap, renderControl]
+  );
+
+  const secondaryControls = useMemo(
+    () =>
+      controlSections
+        .filter(([key]) => !primaryKeys.includes(key as keyof UnifiedPayload))
+        .map(([key, def]) => renderControl(key, def))
+        .filter((control): control is ReactElement => Boolean(control)),
+    [controlSections, primaryKeys, renderControl]
+  );
 
   return (
     <div className="relative min-h-screen overflow-hidden">
@@ -845,21 +898,15 @@ export default function Page() {
         <div className="absolute left-1/3 bottom-[-200px] h-[480px] w-[480px] rounded-full bg-emerald-400/15 blur-[220px]" />
       </div>
       <div className="relative z-10 flex min-h-screen flex-col">
-        <header className="mx-auto w-full max-w-7xl px-6 pt-12">
-          <div className="glass-surface divider-gradient flex flex-col gap-4 px-6 py-6 transition duration-300 hover:shadow-[0_22px_120px_rgba(56,189,248,0.18)] sm:flex-row sm:items-center sm:justify-between">
-            <div>
-              <span className="inline-flex items-center gap-2 rounded-full bg-sky-500/10 px-3 py-1 text-xs font-semibold text-sky-300">
-                <span className="h-2 w-2 rounded-full bg-sky-300 animate-pulse" />
-                Live render queue
+        <header className="mx-auto w-full max-w-5xl px-3 pt-4">
+          <div className="glass-surface flex flex-col gap-2 rounded-2xl border border-white/10 bg-black/30 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex items-center gap-3">
+              <span className="text-base font-semibold text-white">Generator</span>
+              <span className="rounded-full border border-white/10 bg-white/5 px-2 py-0.5 text-[11px] text-slate-300">
+                {jobs.length} jobs
               </span>
-              <h1 className="mt-3 text-2xl font-semibold text-white sm:text-3xl">
-                Freeflow Creative Studio
-              </h1>
-              <p className="mt-1 text-sm text-slate-400">
-                Craft cinematic motion or refined edits with instant FAL pipelines.
-              </p>
             </div>
-            <div className="flex flex-col gap-4 sm:flex-row sm:items-center">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
               <div className="flex items-center gap-2 rounded-full border border-white/10 bg-white/5 p-1">
                 <button
                   type="button"
@@ -890,12 +937,12 @@ export default function Page() {
                   value={falKeyInput}
                   onChange={(event) => handleFalKeyChange(event.target.value)}
                   placeholder="FAL API Key"
-                  className="w-full rounded-2xl border border-white/10 bg-white/5 px-4 py-2 text-sm text-white outline-none transition focus:border-sky-400 focus:ring-1 focus:ring-sky-400 sm:w-64"
+                  className="w-full rounded-xl border border-white/10 bg-white/5 px-4 py-2 text-sm text-white outline-none transition focus:border-sky-400 focus:ring-1 focus:ring-sky-400 sm:w-64"
                 />
                 <button
                   type="button"
                   onClick={() => handleFalKeyChange(falKeyInput)}
-                  className="rounded-2xl bg-sky-500 px-5 py-2 text-sm font-semibold text-white shadow-md shadow-sky-500/30 transition duration-200 hover:-translate-y-0.5 hover:bg-sky-400"
+                  className="rounded-xl bg-sky-500 px-4 py-1.5 text-sm font-semibold text-white shadow-md shadow-sky-500/30 transition duration-200 hover:-translate-y-0.5 hover:bg-sky-400"
                 >
                   Save
                 </button>
@@ -909,146 +956,112 @@ export default function Page() {
           </div>
         </header>
 
-        <main className="mx-auto w-full max-w-7xl flex-1 px-6 pb-16">
+        <main className="mx-auto w-full max-w-5xl flex-1 px-3 pb-6">
           {activeTab === "video" ? (
-            <div className="flex flex-1 flex-col gap-8 lg:flex-row lg:items-start">
-              <section className="glass-surface relative w-full max-w-md flex-shrink-0 overflow-hidden px-6 py-8">
+            <div className="flex flex-1 flex-col gap-4 lg:flex-row lg:items-start">
+              <section className="glass-surface relative flex w-full max-w-xs flex-shrink-0 flex-col overflow-hidden px-3.5 py-3.5">
                 <div className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-white/40 to-transparent" />
-                <div className="pointer-events-none absolute right-6 top-6 h-36 w-36 rounded-full bg-sky-500/15 blur-3xl" />
-                <div className="space-y-3">
-                  <div className="text-xs font-semibold uppercase tracking-widest text-slate-400">
-                    Generator
+                <div className="flex h-full flex-col gap-3">
+                  <div className="flex items-center justify-between rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-xs text-slate-200">
+                    <span className="font-semibold uppercase tracking-wide">Mode</span>
+                    <select
+                      value={selectedModelId}
+                      onChange={(event) => setSelectedModelId(event.target.value)}
+                      className="h-8 rounded-md border border-white/10 bg-black/30 px-2 text-xs text-white outline-none transition focus:border-sky-400 focus:ring-1 focus:ring-sky-400"
+                    >
+                      {MODEL_SPECS.map((model) => (
+                        <option key={model.id} value={model.id}>
+                          {model.label ?? model.id}
+                        </option>
+                      ))}
+                    </select>
                   </div>
-                  <h2 className="text-2xl font-semibold text-white">
-                    Compose your clip
-                  </h2>
-                  <p className="text-sm text-slate-400">
-                    Prompt, reference frames, and parameters unify across all supported video endpoints.
-                  </p>
-                </div>
 
-                <div className="mt-6 space-y-3">
-                  <label className="text-xs font-semibold uppercase tracking-wide text-slate-400">
-                    Model
-                  </label>
-                  <select
-                    value={selectedModelId}
-                    onChange={(event) => setSelectedModelId(event.target.value)}
-                    className="w-full rounded-2xl border border-white/10 bg-white/5 px-3 py-2 text-sm text-white outline-none transition focus:border-sky-400 focus:ring-1 focus:ring-sky-400"
-                  >
-                    {MODEL_SPECS.map((model) => (
-                      <option key={model.id} value={model.id}>
-                        {model.label ?? model.id}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
-                <div className="mt-6 space-y-3">
-                  <label className="text-xs font-semibold uppercase tracking-wide text-slate-400">
-                    Prompt
-                  </label>
-                  <textarea
-                    value={prompt}
-                    onChange={(event) => setPrompt(event.target.value)}
-                    rows={4}
-                    placeholder="Describe motion, subject, camera, lighting…"
-                    className="w-full rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-white outline-none transition focus:border-sky-400 focus:ring-1 focus:ring-sky-400"
-                  />
-                </div>
-
-                <div className="mt-6 grid grid-cols-1 gap-4 sm:grid-cols-2">
-                  <DropZone
-                    label="Start frame"
-                    required={Boolean(startParam?.[1]?.required)}
-                    fileName={startFile?.name}
-                    previewUrl={startPreview}
-                    onFileSelected={setStartFile}
-                  />
-                  {isSupportEnabled(selectedModel?.supports.endFrame ?? false) ? (
+                  <div className="grid grid-cols-2 gap-2">
                     <DropZone
-                      label="End frame"
-                      required={Boolean(endParam?.[1]?.required)}
-                      fileName={endFile?.name}
-                      previewUrl={endPreview}
-                      onFileSelected={setEndFile}
+                      label="Start"
+                      required={Boolean(startParam?.[1]?.required)}
+                      fileName={startFile?.name}
+                      previewUrl={startPreview}
+                      onFileSelected={setStartFile}
                     />
-                  ) : (
-                    <div className="flex h-full items-center justify-center rounded-2xl border border-dashed border-white/10 bg-white/5 px-4 text-center text-xs text-slate-500">
-                      End frame not supported
-                    </div>
-                  )}
-                </div>
+                    {isSupportEnabled(selectedModel?.supports.endFrame ?? false) ? (
+                      <DropZone
+                        label="End"
+                        required={Boolean(endParam?.[1]?.required)}
+                        fileName={endFile?.name}
+                        previewUrl={endPreview}
+                        onFileSelected={setEndFile}
+                      />
+                    ) : (
+                      <div className="flex h-28 items-center justify-center rounded-lg border border-dashed border-white/10 bg-white/5 px-2 text-center text-[11px] text-slate-400">
+                        End frame off
+                      </div>
+                    )}
+                  </div>
 
-                <div className="mt-6 grid grid-cols-1 gap-4 md:grid-cols-2">
-                  {controlSections.map(([key, definition]) =>
-                    renderControl(key, definition)
-                  )}
-                </div>
+                  <div className="rounded-lg border border-white/10 bg-white/5 px-3 py-3">
+                    <textarea
+                      value={prompt}
+                      onChange={(event) => setPrompt(event.target.value)}
+                      rows={3}
+                      placeholder="Describe or upload frames"
+                      className="w-full resize-none rounded-md border border-white/10 bg-black/30 px-2 py-2 text-sm text-white outline-none transition focus:border-sky-400 focus:ring-1 focus:ring-sky-400"
+                    />
+                  </div>
 
-                <div className="mt-6 flex flex-col gap-2">
-                  <label className="text-xs font-semibold uppercase tracking-wide text-slate-400">
-                    Internal save path
-                  </label>
-                  <input
-                    type="text"
-                    value={downloadPath}
-                    onChange={(event) => {
-                      const nextValue = event.target.value;
-                      setDownloadPath(nextValue);
-                      if (typeof window !== "undefined") {
-                        localStorage.setItem(
-                          "FREEFLOW_SAVE_PATH",
-                          nextValue || "downloads"
-                        );
-                      }
-                    }}
-                    placeholder="downloads"
-                    className="rounded-2xl border border-white/10 bg-white/5 px-3 py-2 text-sm text-white outline-none transition focus:border-sky-400 focus:ring-1 focus:ring-sky-400"
-                  />
-                  <p className="text-xs text-slate-500">
-                    Stored locally within browser IndexedDB under this virtual folder.
-                  </p>
-                </div>
+                  <button
+                    type="button"
+                    onClick={handleGenerate}
+                    className={primaryActionButton}
+                  >
+                    <span className="flex items-center justify-center gap-2">
+                      {pendingUploads > 0 && <Spinner size="sm" />}
+                      {pendingUploads > 0 ? "Uploading…" : "Generate"}
+                    </span>
+                  </button>
 
-                <button
-                  type="button"
-                  onClick={handleGenerate}
-                  disabled={isGenerating}
-                  className="mt-8 w-full rounded-2xl bg-gradient-to-r from-sky-500 via-blue-500 to-indigo-500 py-3 text-sm font-semibold text-white shadow-lg shadow-sky-500/25 transition duration-200 hover:-translate-y-0.5 hover:shadow-[0_24px_80px_rgba(59,130,246,0.35)] disabled:cursor-not-allowed disabled:opacity-60"
-                >
-                  <span className="flex items-center justify-center gap-2">
-                    {isGenerating && <Spinner size="sm" />}
-                    {isGenerating ? "Uploading…" : "Generate"}
-                  </span>
-                </button>
+                  <div className="flex-1 overflow-y-auto pr-1">
+                    {primaryControls.length > 0 ? (
+                      <div className="grid grid-cols-3 gap-2">
+                        {primaryControls.map((control) => control)}
+                      </div>
+                    ) : null}
+
+                    {secondaryControls.length > 0 ? (
+                      <div className="mt-2 grid grid-cols-1 gap-2">
+                        {secondaryControls.map((control) => control)}
+                      </div>
+                    ) : null}
+                  </div>
+                </div>
               </section>
 
-              <aside className="glass-surface relative flex w-full flex-1 flex-col gap-5 overflow-hidden px-6 py-6">
+              <aside className="glass-surface relative flex w-full flex-1 flex-col gap-2.5 overflow-hidden px-3.5 py-3.5">
                 <div className="pointer-events-none absolute inset-x-4 top-0 h-px bg-gradient-to-r from-transparent via-white/30 to-transparent" />
                 <div className="flex items-center justify-between">
                   <div>
                     <div className="text-xs font-semibold uppercase tracking-wide text-slate-400">
                       Renders
                     </div>
-                    <div className="mt-1 text-lg font-semibold text-white">
+                    <div className="mt-0.5 text-base font-semibold text-white">
                       Active queue
                     </div>
                   </div>
-                  <div className="rounded-full bg-white/5 px-3 py-1 text-xs font-semibold text-slate-300">
+                  <div className="rounded-full bg-white/5 px-3 py-1 text-[11px] font-semibold text-slate-300 sm:text-xs">
                     {jobs.length} total
                   </div>
                 </div>
-                <div className="fade-mask flex max-h-[calc(100vh-240px)] flex-col gap-4 overflow-y-auto pr-2">
+                <div className="fade-mask flex max-h-[calc(100vh-200px)] flex-col gap-2.5 overflow-y-auto pr-2">
                   {jobs.length === 0 ? (
-                    <div className="rounded-2xl border border-white/5 bg-white/5 px-5 py-6 text-sm text-slate-400">
+                    <div className="rounded-xl border border-white/5 bg-white/5 px-3.5 py-4 text-sm text-slate-400">
                       Your renders will appear here with live queue events and downloadable assets.
                     </div>
                   ) : (
                     jobs.map((job) => (
                       <div
                         key={job.id}
-                        className="relative flex flex-col gap-4 rounded-2xl border border-white/5 bg-white/10/5 px-4 py-4 backdrop-blur-xl transition duration-200 hover:-translate-y-1 hover:shadow-[0_24px_80px_rgba(30,64,175,0.18)]"
+                        className="relative flex flex-col gap-2.5 rounded-xl border border-white/5 bg-white/10 px-3.5 py-3 backdrop-blur-xl transition duration-200 hover:-translate-y-1 hover:shadow-[0_24px_80px_rgba(30,64,175,0.18)]"
                       >
                         <div className="flex items-center justify-between">
                           <div>
@@ -1065,17 +1078,17 @@ export default function Page() {
                         {STATUS_META[job.status].label}
                       </span>
                         </div>
-                        <div className="rounded-2xl border border-white/5 bg-white/5 px-4 py-3 text-xs text-slate-300">
+                        <div className="rounded-xl border border-white/5 bg-white/5 px-3 py-2 text-xs text-slate-300">
                           {job.prompt}
                         </div>
                     {job.videoUrl ? (
                       <video
                         src={job.videoUrl}
                         controls
-                        className="w-full rounded-2xl border border-white/5"
+                        className="w-full rounded-xl border border-white/5"
                       />
                     ) : (
-                      <div className="relative overflow-hidden rounded-2xl border border-white/5 bg-white/5">
+                      <div className="relative overflow-hidden rounded-xl border border-white/5 bg-white/5">
                         {job.preview ? (
                           <img
                             src={job.preview}
@@ -1083,7 +1096,7 @@ export default function Page() {
                             className="h-full w-full object-cover"
                           />
                         ) : (
-                          <div className="flex h-40 items-center justify-center text-sm text-slate-500">
+                          <div className="flex h-28 items-center justify-center text-sm text-slate-500">
                             Awaiting render…
                           </div>
                         )}
@@ -1097,13 +1110,13 @@ export default function Page() {
                     )}
 
                         {job.status === "error" ? (
-                          <div className="rounded-2xl border border-rose-400/30 bg-rose-500/10 px-4 py-3 text-sm text-rose-200">
+                          <div className="rounded-xl border border-rose-400/30 bg-rose-500/10 px-3 py-2 text-sm text-rose-200">
                             {job.error ?? "Something went wrong."}
                           </div>
                         ) : null}
 
                         {job.events.length > 0 ? (
-                          <div className="space-y-2 rounded-2xl border border-white/5 bg-white/5 px-3 py-3">
+                          <div className="space-y-1.5 rounded-xl border border-white/5 bg-white/5 px-3 py-2">
                             <div className="text-xs font-semibold uppercase tracking-wide text-slate-400">
                               Queue events
                             </div>
@@ -1118,24 +1131,14 @@ export default function Page() {
                         ) : null}
 
                         {job.status === "success" && job.videoUrl ? (
-                          <div className="flex flex-col gap-2">
-                            <div className="flex flex-wrap items-center gap-3">
-                              <a
-                                href={job.videoUrl}
-                                target="_blank"
-                                rel="noreferrer"
-                                className="text-sm font-semibold text-sky-300 transition hover:text-sky-200"
-                              >
-                                Open in new tab
-                              </a>
-                              <button
-                                type="button"
-                                onClick={() => handleDownload(job)}
-                                className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs font-semibold text-slate-200 transition hover:border-sky-400 hover:text-sky-200"
-                              >
-                                Download
-                              </button>
-                            </div>
+                          <div className="flex flex-col gap-1.5">
+                            <button
+                              type="button"
+                              onClick={() => handleDownload(job)}
+                              className="self-start rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs font-semibold text-slate-200 transition hover:border-sky-400 hover:text-sky-200"
+                            >
+                              Download
+                            </button>
                             <div className="text-xs text-slate-500">
                               {job.saving
                                 ? "Saving to internal storage…"
