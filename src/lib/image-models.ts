@@ -65,6 +65,34 @@ function resolveAspectRatio(
 
 export const IMAGE_MODELS: ImageModelSpec[] = [
   {
+    id: "flux-kontext-pro",
+    label: "Flux Kontext Pro",
+    endpoint: "fal-ai/flux/kontext/pro",
+    mode: "edit",
+    maxRefs: 4,
+    mapInput: ({ prompt, imageUrls, size, seed, steps }) => {
+      const aspectRatio = resolveAspectRatio(size);
+      return {
+        prompt,
+        ...(imageUrls.length > 0
+          ? {
+              image_urls: imageUrls.slice(0, 4),
+            }
+          : {}),
+        ...(aspectRatio ? { aspect_ratio: aspectRatio } : {}),
+        num_images: 1,
+        output_format: "png",
+        guidance_scale: 4.5,
+        ...(steps !== undefined ? { num_inference_steps: steps } : {}),
+        ...(seed !== undefined ? { seed } : {}),
+      };
+    },
+    getUrls: (output) =>
+      ((output as { images?: Array<{ url?: string }> })?.images ?? [])
+        .map((image) => image?.url)
+        .filter(Boolean) as string[],
+  },
+  {
     id: "nano-banana-edit",
     label: "Nano Banana — Edit",
     endpoint: "fal-ai/nano-banana/edit",

@@ -86,6 +86,28 @@
       "output": { "videoPath": "video.url" }
     },
     {
+      "id": "ltx-2-fast",
+      "endpoint": "fal-ai/ltxv-2/fast/image-to-video",
+      "supports": {
+        "startFrame": true,
+        "endFrame": false,
+        "audio": true,
+        "resolution": true,
+        "aspectRatio": true,
+        "fps": true
+      },
+      "params": {
+        "image_url": { "type": "string", "required": true, "uiKey": "start_frame_url" },
+        "prompt": { "type": "string", "required": true },
+        "duration": { "type": "enum", "values": [4, 6, 8], "default": 6 },
+        "resolution": { "type": "enum", "values": ["720p", "1080p", "1440p"], "default": "1080p" },
+        "aspect_ratio": { "type": "enum", "values": ["16:9", "9:16", "1:1"], "default": "16:9" },
+        "fps": { "type": "enum", "values": [25, 30], "default": 25 },
+        "generate_audio": { "type": "boolean", "default": true }
+      },
+      "output": { "videoPath": "video.url" }
+    },
+    {
       "id": "hailuo-2.3-pro",
       "endpoint": "fal-ai/minimax/hailuo-2.3/pro/image-to-video",
       "supports": {

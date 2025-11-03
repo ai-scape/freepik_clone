@@ -19,7 +19,9 @@ import {
   runFal,
   setFalKey,
 } from "../lib/fal";
-import { getVideo, saveVideo } from "../lib/storage";
+import { arrayBufferToBase64 } from "../lib/file-utils";
+import { formatCompactTimestamp } from "../lib/time";
+import { getModelPricingLabel } from "../lib/pricing";
 import ImageTab from "../components/ImageTab";
 import { Spinner } from "../components/ui/Spinner";
 
@@ -40,6 +42,7 @@ type Job = {
   events: string[];
   storagePath: string;
   localKey?: string;
+  localUrl?: string;
   saving?: boolean;
   saved?: boolean;
   saveError?: string;
@@ -121,6 +124,134 @@ function extractUploadUrl(uploadResult: unknown): string | undefined {
     );
   }
   return undefined;
+}
+
+const VIDEO_JOBS_STORAGE_KEY = "video-job-history";
+
+type StoredJobRecord = {
+  id?: string;
+  modelId?: string;
+  prompt?: string;
+  createdAt?: number;
+  preview?: string | null;
+  events?: unknown[];
+  localKey?: string;
+  localUrl?: string;
+  storagePath?: string;
+};
+
+function sanitizeFileSegment(value: string) {
+  return value
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 40);
+}
+
+function buildVideoFileName(job: Pick<Job, "id" | "modelId" | "createdAt" | "storagePath">) {
+  const baseSegment =
+    sanitizeFileSegment(job.storagePath || "downloads") || "downloads";
+  const modelSegment = sanitizeFileSegment(job.modelId) || "model";
+  const stamp = formatCompactTimestamp(new Date(job.createdAt));
+  const idSegment =
+    sanitizeFileSegment(job.id).slice(-6) || job.id.slice(-6);
+  return `${baseSegment}-${modelSegment}-${stamp}-${idSegment}.mp4`;
+}
+
+function loadStoredJobs(): Job[] {
+  if (typeof window === "undefined") return [];
+  const raw = window.localStorage.getItem(VIDEO_JOBS_STORAGE_KEY);
+  if (!raw) return [];
+  try {
+    const data = JSON.parse(raw) as StoredJobRecord[];
+    if (!Array.isArray(data)) return [];
+    return data
+      .map((entry) => {
+        if (!entry || typeof entry !== "object") return null;
+        const localUrl =
+          typeof entry.localUrl === "string" ? entry.localUrl : undefined;
+        const localKey =
+          typeof entry.localKey === "string" ? entry.localKey : undefined;
+        if (!localUrl || !localKey) return null;
+        const id =
+          typeof entry.id === "string" ? entry.id : createId("job");
+        const createdAt =
+          typeof entry.createdAt === "number"
+            ? entry.createdAt
+            : Date.now();
+        const modelId =
+          typeof entry.modelId === "string"
+            ? entry.modelId
+            : DEFAULT_MODEL_ID;
+        const prompt =
+          typeof entry.prompt === "string" ? entry.prompt : "";
+        const preview =
+          typeof entry.preview === "string" ? entry.preview : null;
+        const events = Array.isArray(entry.events)
+          ? entry.events
+              .map((event) =>
+                typeof event === "string" ? event : JSON.stringify(event)
+              )
+              .slice(-10)
+          : [];
+        const storagePath =
+          typeof entry.storagePath === "string"
+            ? entry.storagePath
+            : "downloads";
+        return {
+          id,
+          modelId,
+          prompt,
+          status: "success" as JobStatus,
+          createdAt,
+          attempts: 1,
+          payload: undefined,
+          videoUrl: localUrl,
+          raw: undefined,
+          preview,
+          events,
+          storagePath,
+          localKey,
+          localUrl,
+          saving: false,
+          saved: true,
+          saveError: undefined,
+        };
+      })
+      .filter((job): job is Job => Boolean(job));
+  } catch {
+    return [];
+  }
+}
+
+function persistStoredJobs(jobs: Job[]) {
+  if (typeof window === "undefined") return;
+  try {
+    const completed = jobs.filter(
+      (job) => job.status === "success" && job.localKey && job.localUrl
+    );
+    if (!completed.length) {
+      window.localStorage.removeItem(VIDEO_JOBS_STORAGE_KEY);
+      return;
+    }
+    const payload = completed.map((job) => ({
+      id: job.id,
+      modelId: job.modelId,
+      prompt: job.prompt,
+      createdAt: job.createdAt,
+      preview: job.preview ?? null,
+      events: job.events.slice(-10),
+      localKey: job.localKey,
+      localUrl: job.localUrl,
+      storagePath: job.storagePath,
+    }));
+    window.localStorage.setItem(
+      VIDEO_JOBS_STORAGE_KEY,
+      JSON.stringify(payload)
+    );
+  } catch {
+    // Ignore persistence errors
+  }
 }
 
 type DropZoneProps = {
@@ -242,6 +373,7 @@ export default function Page() {
   const [jobs, setJobs] = useState<Job[]>([]);
   const [downloadPath, setDownloadPath] = useState("downloads");
   const runningJobs = useRef(new Set<string>());
+  const jobsInitializedRef = useRef(false);
   const mountedRef = useRef(true);
 
   useEffect(() => {
@@ -250,6 +382,10 @@ export default function Page() {
     if (typeof window !== "undefined") {
       setFalKeyInput(localStorage.getItem("FAL_KEY") ?? "");
       setDownloadPath(localStorage.getItem("FREEFLOW_SAVE_PATH") ?? "downloads");
+      const storedJobs = loadStoredJobs();
+      if (storedJobs.length) {
+        setJobs(storedJobs);
+      }
     }
     return () => {
       mountedRef.current = false;
@@ -261,6 +397,11 @@ export default function Page() {
 
   const selectedModel: ModelSpec | undefined = useMemo(
     () => MODEL_SPEC_MAP[selectedModelId],
+    [selectedModelId]
+  );
+
+  const selectedModelPricing = useMemo(
+    () => getModelPricingLabel(selectedModelId),
     [selectedModelId]
   );
 
@@ -373,6 +514,14 @@ export default function Page() {
     };
   }, [endFile]);
 
+  useEffect(() => {
+    if (!jobsInitializedRef.current) {
+      jobsInitializedRef.current = true;
+      return;
+    }
+    persistStoredJobs(jobs);
+  }, [jobs]);
+
   const handleFalKeyChange = (value: string) => {
     setFalKeyInput(value);
     if (typeof window === "undefined") return;
@@ -409,18 +558,35 @@ export default function Page() {
   );
 
   const persistVideoAsset = useCallback(
-    async (jobId: string, storageKey: string, videoUrl: string) => {
+    async (jobId: string, fileName: string, videoUrl: string) => {
       try {
         const response = await fetch(videoUrl);
         if (!response.ok) {
           throw new Error(`Failed to fetch video (${response.status})`);
         }
         const blob = await response.blob();
-        await saveVideo(storageKey, blob);
+        const arrayBuffer = await blob.arrayBuffer();
+        const base64 = arrayBufferToBase64(arrayBuffer);
+        const saveResponse = await fetch("/api/assets", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            name: fileName,
+            data: base64,
+          }),
+        });
+        if (!saveResponse.ok) {
+          throw new Error("Failed to persist video locally.");
+        }
+        const localUrl = `/assets/${encodeURIComponent(fileName)}`;
         notifyJobUpdate(jobId, {
           saving: false,
           saved: true,
-          localKey: storageKey,
+          localKey: fileName,
+          localUrl,
+          videoUrl: localUrl,
           saveError: undefined,
         });
       } catch (error) {
@@ -458,20 +624,25 @@ export default function Page() {
           }));
         });
 
-        const basePath = job.storagePath?.trim() || "downloads";
-        const storageKey = `${
-          basePath.replace(/\/+$/, "") || "downloads"
-        }/${job.id}.mp4`;
+        const fileName = buildVideoFileName({
+          id: job.id,
+          modelId: job.modelId,
+          createdAt: job.createdAt,
+          storagePath: job.storagePath,
+        });
 
         notifyJobUpdate(job.id, {
           status: "success",
           videoUrl: result.url,
           raw: result.raw,
           saving: true,
-          localKey: storageKey,
+          saved: false,
+          localKey: fileName,
+          localUrl: undefined,
+          saveError: undefined,
         });
 
-        persistVideoAsset(job.id, storageKey, result.url);
+        await persistVideoAsset(job.id, fileName, result.url);
       } catch (error) {
         notifyJobUpdate(job.id, {
           status: "error",
@@ -646,24 +817,18 @@ export default function Page() {
 
   const handleDownload = useCallback(
     async (job: Job) => {
-      if (!job.videoUrl) return;
+      const sourceUrl = job.localUrl ?? job.videoUrl;
+      if (!sourceUrl) return;
       try {
-        let blob: Blob | undefined;
-        if (job.localKey) {
-          blob = await getVideo(job.localKey);
+        const response = await fetch(sourceUrl);
+        if (!response.ok) {
+          throw new Error(`Failed to fetch video (${response.status})`);
         }
-        if (!blob) {
-          const response = await fetch(job.videoUrl);
-          if (!response.ok) {
-            throw new Error(`Failed to fetch video (${response.status})`);
-          }
-          blob = await response.blob();
-        }
+        const blob = await response.blob();
         const url = URL.createObjectURL(blob);
         const anchor = document.createElement("a");
-        const filename =
-          job.localKey?.split("/").pop() ??
-          `${job.modelId}-${job.id}.mp4`;
+        const fallbackName = `${sanitizeFileSegment(job.modelId) || "video"}-${formatCompactTimestamp(new Date(job.createdAt))}.mp4`;
+        const filename = job.localKey ?? fallbackName;
         anchor.href = url;
         anchor.download = filename;
         document.body.appendChild(anchor);
@@ -1010,16 +1175,26 @@ export default function Page() {
                     />
                   </div>
 
-                  <button
-                    type="button"
-                    onClick={handleGenerate}
-                    className={primaryActionButton}
-                  >
-                    <span className="flex items-center justify-center gap-2">
-                      {pendingUploads > 0 && <Spinner size="sm" />}
-                      {pendingUploads > 0 ? "Uploading…" : "Generate"}
-                    </span>
-                  </button>
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={handleGenerate}
+                      className={`${primaryActionButton} flex-1 ${
+                        pendingUploads > 0 ? "opacity-60" : ""
+                      }`}
+                      disabled={pendingUploads > 0}
+                    >
+                      <span className="flex items-center justify-center gap-2">
+                        {pendingUploads > 0 && <Spinner size="sm" />}
+                        {pendingUploads > 0 ? "Uploading…" : "Generate"}
+                      </span>
+                    </button>
+                    {selectedModelPricing ? (
+                      <span className="whitespace-nowrap rounded-full border border-white/10 bg-white/5 px-3 py-1 text-[11px] font-semibold text-slate-200">
+                        {selectedModelPricing}
+                      </span>
+                    ) : null}
+                  </div>
 
                   <div className="flex-1 overflow-y-auto pr-1">
                     {primaryControls.length > 0 ? (
@@ -1081,9 +1256,9 @@ export default function Page() {
                         <div className="rounded-xl border border-white/5 bg-white/5 px-3 py-2 text-xs text-slate-300">
                           {job.prompt}
                         </div>
-                    {job.videoUrl ? (
+                    {job.localUrl || job.videoUrl ? (
                       <video
-                        src={job.videoUrl}
+                        src={job.localUrl ?? job.videoUrl ?? undefined}
                         controls
                         className="w-full rounded-xl border border-white/5"
                       />
@@ -1130,7 +1305,7 @@ export default function Page() {
                           </div>
                         ) : null}
 
-                        {job.status === "success" && job.videoUrl ? (
+                        {job.status === "success" && (job.localUrl || job.videoUrl) ? (
                           <div className="flex flex-col gap-1.5">
                             <button
                               type="button"
