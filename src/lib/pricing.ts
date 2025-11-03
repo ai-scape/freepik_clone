@@ -20,6 +20,8 @@ const MODEL_PRICING: Record<string, PricingInfo> = {
   "flux-kontext-pro": { unit: "image", amount: 0.04, currency: "USD" },
   "nano-banana-edit": { unit: "image", amount: 0.039, currency: "USD" },
   "nano-banana": { unit: "image", amount: 0.039, currency: "USD" },
+  "imagen-4-fast": { unit: "image", amount: 0.02, currency: "USD" },
+  "imagen-4": { unit: "image", amount: 0.04, currency: "USD" },
   "qwen-image-edit-plus": { unit: "image", amount: 0.03, currency: "USD" },
   "seedream-v4-edit": { unit: "image", amount: 0.03, currency: "USD" },
   "chrono-edit": { unit: "image", amount: 0.01, currency: "USD" },

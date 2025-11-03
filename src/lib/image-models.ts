@@ -130,6 +130,52 @@ export const IMAGE_MODELS: ImageModelSpec[] = [
         .filter(Boolean) as string[],
   },
   {
+    id: "imagen-4-fast",
+    label: "Imagen 4 Fast — Text",
+    endpoint: "fal-ai/imagen4/preview/fast",
+    mode: "text",
+    maxRefs: 0,
+    mapInput: ({ prompt, size, seed, steps }) => {
+      const aspectRatio = resolveAspectRatio(size);
+      return {
+        prompt,
+        ...(aspectRatio ? { aspect_ratio: aspectRatio } : {}),
+        ...(seed !== undefined ? { seed } : {}),
+        ...(steps !== undefined ? { num_inference_steps: steps } : {}),
+        guidance_scale: 5,
+        num_images: 1,
+        output_format: "png",
+      };
+    },
+    getUrls: (output) =>
+      ((output as { images?: Array<{ url?: string }> })?.images ?? [])
+        .map((image) => image?.url)
+        .filter(Boolean) as string[],
+  },
+  {
+    id: "imagen-4",
+    label: "Imagen 4 — Text",
+    endpoint: "fal-ai/imagen4/preview",
+    mode: "text",
+    maxRefs: 0,
+    mapInput: ({ prompt, size, seed, steps }) => {
+      const aspectRatio = resolveAspectRatio(size);
+      return {
+        prompt,
+        ...(aspectRatio ? { aspect_ratio: aspectRatio } : {}),
+        ...(seed !== undefined ? { seed } : {}),
+        ...(steps !== undefined ? { num_inference_steps: steps } : {}),
+        guidance_scale: 6,
+        num_images: 1,
+        output_format: "png",
+      };
+    },
+    getUrls: (output) =>
+      ((output as { images?: Array<{ url?: string }> })?.images ?? [])
+        .map((image) => image?.url)
+        .filter(Boolean) as string[],
+  },
+  {
     id: "qwen-image-edit-plus",
     label: "Qwen Image Edit Plus (2509)",
     endpoint: "fal-ai/qwen-image-edit-plus",
