@@ -3,6 +3,10 @@ import {
   EXTRA_MODELS,
   type ModelSpec as ExtraModelSpec,
 } from "./models-extra";
+import type {
+  ModelProvider,
+  TaskPollingConfig,
+} from "./providers";
 
 type SupportFlag = boolean | "unstable" | "unspecified";
 
@@ -19,6 +23,7 @@ export type ParamDefinition = {
 export type ModelSpec = {
   id: string;
   endpoint: string;
+  provider?: ModelProvider;
   label?: string;
   supports: {
     startFrame: SupportFlag;
@@ -32,6 +37,7 @@ export type ModelSpec = {
   output: {
     videoPath: string;
   };
+  taskConfig?: TaskPollingConfig;
   adapter?: {
     mapInput(unified: UnifiedPayload): Record<string, FalInputValue>;
     getVideoUrl(data: unknown): string | undefined;
@@ -57,6 +63,7 @@ const jsonSpecs =
   (specs.models as unknown as ModelSpec[])?.map((spec) => ({
     ...spec,
     label: spec.label ?? spec.id,
+    provider: spec.provider ?? "fal",
   })) ?? [];
 
 const RESOLUTION_CONFIG: Record<
@@ -144,12 +151,14 @@ const extraSpecs: ModelSpec[] = EXTRA_MODELS.map((extra: ExtraModelSpec): ModelS
   return {
     id: extra.id,
     endpoint: extra.endpoint,
+    provider: extra.provider ?? "fal",
     label: extra.label,
     supports,
     params,
     output: {
       videoPath: "video.url",
     },
+    taskConfig: extra.taskConfig,
     adapter: {
       mapInput: (unified) =>
         extra.mapInput({
@@ -194,7 +203,7 @@ function coerceEnumValue(
 
 type FalInputValue = string | number | boolean | undefined;
 
-export function buildFalInput(
+export function buildModelInput(
   model: ModelSpec,
   unified: UnifiedPayload
 ): Record<string, FalInputValue> {

@@ -1,4 +1,7 @@
-import { initFalFromLocalStorage } from "./fal";
+import type {
+  ModelProvider,
+  TaskPollingConfig,
+} from "./providers";
 
 export type ImageSizePreset =
   | "square_hd"
@@ -21,14 +24,11 @@ export type ImageModelSpec = {
   id: string;
   label: string;
   endpoint: string;
+  provider?: ModelProvider;
   mode: "edit" | "hybrid" | "text";
   maxRefs: number;
-  mapInput: (
-    job: ImageJob
-  ) => Record<
-    string,
-    string | number | boolean | string[] | undefined | ImageJob["size"]
-  >;
+  taskConfig?: TaskPollingConfig;
+  mapInput: (job: ImageJob) => Record<string, unknown>;
   getUrls: (out: unknown) => string[];
 };
 
@@ -95,39 +95,77 @@ export const IMAGE_MODELS: ImageModelSpec[] = [
   {
     id: "nano-banana-edit",
     label: "Nano Banana — Edit",
-    endpoint: "fal-ai/nano-banana/edit",
+    endpoint: "/api/v1/jobs/createTask",
+    provider: "kie",
     mode: "edit",
     maxRefs: 4,
-    mapInput: ({ prompt, imageUrls, size, seed }) => ({
-      prompt,
-      image_urls: imageUrls.slice(0, 4),
-      ...(size ? { image_size: size } : {}),
-      ...(seed !== undefined ? { seed } : {}),
-    }),
-    getUrls: (output) =>
-      ((output as { images?: Array<{ url?: string }> })?.images ?? [])
-        .map((image) => image?.url)
-        .filter(Boolean) as string[],
+    mapInput: ({ prompt, imageUrls, size }) => {
+      const aspectRatio = resolveAspectRatio(size);
+      return {
+        model: "google/nano-banana-edit",
+        input: {
+          prompt,
+          image_urls: imageUrls.slice(0, 10),
+          output_format: "png",
+          ...(aspectRatio ? { image_size: aspectRatio } : {}),
+        },
+      };
+    },
+    taskConfig: {
+      statusEndpoint: "/api/v1/jobs/recordInfo",
+      statePath: "data.state",
+      successStates: ["success"],
+      failureStates: ["fail"],
+      responseDataPath: "data",
+      pollIntervalMs: 4000,
+    },
+    getUrls: (output) => {
+      const data = (output as { resultJson?: string } | undefined)?.resultJson;
+      if (typeof data !== "string") return [];
+      try {
+        const parsed = JSON.parse(data) as { resultUrls?: string[] };
+        return (parsed.resultUrls ?? []).filter(Boolean);
+      } catch {
+        return [];
+      }
+    },
   },
   {
     id: "nano-banana",
     label: "Nano Banana — Text",
-    endpoint: "fal-ai/nano-banana",
+    endpoint: "/api/v1/jobs/createTask",
+    provider: "kie",
     mode: "text",
     maxRefs: 0,
     mapInput: ({ prompt, size }) => {
       const aspectRatio = resolveAspectRatio(size);
       return {
-        prompt,
-        ...(aspectRatio ? { aspect_ratio: aspectRatio } : {}),
-        num_images: 1,
-        output_format: "jpeg",
+        model: "google/nano-banana",
+        input: {
+          prompt,
+          output_format: "png",
+          ...(aspectRatio ? { image_size: aspectRatio } : {}),
+        },
       };
     },
-    getUrls: (output) =>
-      ((output as { images?: Array<{ url?: string }> })?.images ?? [])
-        .map((image) => image?.url)
-        .filter(Boolean) as string[],
+    taskConfig: {
+      statusEndpoint: "/api/v1/jobs/recordInfo",
+      statePath: "data.state",
+      successStates: ["success"],
+      failureStates: ["fail"],
+      responseDataPath: "data",
+      pollIntervalMs: 4000,
+    },
+    getUrls: (output) => {
+      const data = (output as { resultJson?: string } | undefined)?.resultJson;
+      if (typeof data !== "string") return [];
+      try {
+        const parsed = JSON.parse(data) as { resultUrls?: string[] };
+        return (parsed.resultUrls ?? []).filter(Boolean);
+      } catch {
+        return [];
+      }
+    },
   },
   {
     id: "imagen-4-fast",
@@ -238,19 +276,3 @@ export const IMAGE_MODELS: ImageModelSpec[] = [
         .filter(Boolean) as string[],
   },
 ];
-
-export async function runImageJob(
-  spec: ImageModelSpec,
-  job: ImageJob
-): Promise<{
-  request_id?: string;
-  requestId?: string;
-  data: unknown;
-}> {
-  const client = initFalFromLocalStorage();
-  const result = await client.subscribe(spec.endpoint, {
-    input: spec.mapInput(job),
-    logs: true,
-  });
-  return result;
-}

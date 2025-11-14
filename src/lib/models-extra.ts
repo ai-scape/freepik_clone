@@ -1,8 +1,15 @@
+import type {
+  ModelProvider,
+  TaskPollingConfig,
+} from "./providers";
+
 export type ModelSpec = {
   id: string;
   endpoint: string;
   label: string;
+  provider?: ModelProvider;
   supportsEnd: boolean;
+  taskConfig?: TaskPollingConfig;
   mapInput: (
     u: {
       prompt: string;
